@@ -70,7 +70,11 @@ func receiver(sourceUrl string, incoming chan<- []byte) {
 // acceptor dumps an upgraded connection into conns
 func wsHandler(w http.ResponseWriter, r *http.Request, conns chan<- *websocket.Conn) {
 	// Upgrade connection
-	upgrader := websocket.Upgrader{}
+	upgrader := websocket.Upgrader{
+		CheckOrigin: func(r *http.Request) bool {
+			return true
+		},
+	}
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		logrus.WithError(err).Warn("Failed to upgrade WS")
