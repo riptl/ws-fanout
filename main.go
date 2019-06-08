@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
@@ -54,6 +55,18 @@ func receiver(sourceUrl string, incoming chan<- []byte) {
 		logrus.Fatal(err)
 	}
 
+	_ = source.WriteMessage(websocket.TextMessage,
+		[]byte(`{"jsonrpc":"2.0","id":42,"method":"subscribe","params":"subscribe"}`))
+
+	type JrpcMessage struct {
+		Version string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id"`
+		Method  string          `json:"method"`
+		Params  json.RawMessage `json:"params"`
+		Result  json.RawMessage `json:"result"`
+		Error   json.RawMessage `json:"error"`
+	}
+
 	for {
 		msgType, msg, err := source.ReadMessage()
 		if err != nil {
@@ -63,7 +76,15 @@ func receiver(sourceUrl string, incoming chan<- []byte) {
 			logrus.Warn("Ignoring incoming non-text message")
 			continue
 		}
-		incoming <- msg
+		var m JrpcMessage
+		if err := json.Unmarshal(msg, &m); err != nil {
+			logrus.Error(err)
+			return
+		}
+		if m.Method != "subscription" {
+			continue
+		}
+		incoming <- m.Result
 	}
 }
 
@@ -86,7 +107,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request, conns chan<- *websocket.C
 
 func manage(source <-chan []byte, newConns chan *websocket.Conn) {
 	m := Manager{
-		source: source,
+		source:   source,
 		newConns: newConns,
 	}
 	m.run()
