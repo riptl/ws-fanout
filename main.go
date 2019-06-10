@@ -7,6 +7,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"net/http"
 	"os"
+	"time"
 )
 
 // fanout.go: A simple unidirectional WS message fanout
@@ -49,28 +50,26 @@ func main() {
 // Kills process if connection fails.
 func receiver(sourceUrl string, incoming chan<- []byte) {
 	defer close(incoming)
+	for {
+		err := connectAndReceive(sourceUrl, incoming)
+		logrus.WithError(err).Error("Disconnected from source")
+		time.Sleep(10 * time.Second)
+	}
+}
 
+func connectAndReceive(sourceUrl string, incoming chan<- []byte) error {
 	source, _, err := websocket.DefaultDialer.Dial(sourceUrl, nil)
 	if err != nil {
-		logrus.Fatal(err)
+		return err
 	}
 
 	_ = source.WriteMessage(websocket.TextMessage,
 		[]byte(`{"jsonrpc":"2.0","id":42,"method":"subscribe","params":"subscribe"}`))
 
-	type JrpcMessage struct {
-		Version string          `json:"jsonrpc"`
-		ID      json.RawMessage `json:"id"`
-		Method  string          `json:"method"`
-		Params  json.RawMessage `json:"params"`
-		Result  json.RawMessage `json:"result"`
-		Error   json.RawMessage `json:"error"`
-	}
-
 	for {
 		msgType, msg, err := source.ReadMessage()
 		if err != nil {
-			logrus.Fatal(err)
+			return err
 		}
 		if msgType != websocket.TextMessage {
 			logrus.Warn("Ignoring incoming non-text message")
@@ -79,7 +78,7 @@ func receiver(sourceUrl string, incoming chan<- []byte) {
 		var m JrpcMessage
 		if err := json.Unmarshal(msg, &m); err != nil {
 			logrus.Error(err)
-			return
+			continue
 		}
 		if m.Method != "subscription" {
 			continue
@@ -111,4 +110,13 @@ func manage(source <-chan []byte, newConns chan *websocket.Conn) {
 		newConns: newConns,
 	}
 	m.run()
+}
+
+type JrpcMessage struct {
+	Version string          `json:"jsonrpc"`
+	ID      json.RawMessage `json:"id"`
+	Method  string          `json:"method"`
+	Params  json.RawMessage `json:"params"`
+	Result  json.RawMessage `json:"result"`
+	Error   json.RawMessage `json:"error"`
 }
