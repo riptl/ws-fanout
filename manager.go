@@ -2,12 +2,11 @@ package main
 
 import (
 	"github.com/gorilla/websocket"
-	"github.com/sirupsen/logrus"
 )
 
 type Manager struct {
-	conns map[*websocket.Conn]chan []byte
-	source <-chan []byte
+	conns    map[*websocket.Conn]chan []byte
+	source   <-chan []byte
 	newConns chan *websocket.Conn
 }
 
@@ -27,7 +26,7 @@ func (m *Manager) run() {
 					break
 				default:
 					// Client is too slow, kill it
-					logrus.WithField("addr", conn.RemoteAddr().String()).
+					log.WithField("addr", conn.RemoteAddr().String()).
 						Warn("Killing connection to slow peer")
 					m.killConn(conn)
 				}
@@ -40,6 +39,8 @@ func (m *Manager) run() {
 			go outBuffer(conn, buf, deadConns)
 			m.conns[conn] = buf
 		case conn := <-deadConns:
+			log.WithField("addr", conn.RemoteAddr().String()).
+				Info("Connection closed")
 			m.killConn(conn)
 		}
 	}
@@ -49,7 +50,7 @@ func (m *Manager) cleanup() {
 	for conn := range m.conns {
 		conn.UnderlyingConn().Close()
 	}
-	logrus.Fatal("Manager died")
+	log.Fatal("Manager died")
 }
 
 func (m *Manager) killConn(conn *websocket.Conn) {
@@ -61,7 +62,7 @@ func outBuffer(conn *websocket.Conn, out <-chan []byte, deadConns chan<- *websoc
 	for msg := range out {
 		err := conn.WriteMessage(websocket.TextMessage, msg)
 		if err != nil {
-			logrus.WithError(err).Warn("Failed to send message to client")
+			log.WithError(err).Warn("Failed to send message to client")
 			deadConns <- conn
 			return
 		}
