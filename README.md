@@ -1,7 +1,7 @@
 # WebSocket Fanout
 
-`PORT=8001 WS_SOURCE=ws://example.org:8002 ./ws-fanout`
+`./ws-fanout sample.yml`
 
- - Connects to `ws://example.org:8002` (source)
- - Listens on `:8001` (sinks)
- - Forwards every message from source to each connected peer
+ - Connects to WebSocket source URL
+ - Starts a WebSocket server, forwarding every message
+   from source to each connected peer

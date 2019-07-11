@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -20,7 +22,12 @@ const inBuffer = 256
 var log = logrus.StandardLogger()
 
 func main() {
-	viper.SetConfigFile("config.yml")
+	if len(os.Args) != 2 {
+		fmt.Fprintln(os.Stderr, "Usage: ws-fanout <config_file.yml>")
+		os.Exit(1)
+	}
+
+	viper.SetConfigFile(os.Args[1])
 	err := viper.ReadInConfig()
 	if err != nil {
 		log.Fatal(err)
@@ -41,15 +48,17 @@ func main() {
 	go receiver(viper.GetString("source"), source)
 
 	// Collect WS connections
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		wsHandler(w, r, newConns)
 	})
 
+	log.Infof("Listening on %s", viper.GetString("bind"))
+
 	if viper.GetBool("tls.enabled") {
 		err = http.ListenAndServeTLS(viper.GetString("bind"),
-			viper.GetString("tls.cert"), viper.GetString("tls.key"), nil)
+			viper.GetString("tls.cert"), viper.GetString("tls.key"), handler)
 	} else {
-		err = http.ListenAndServe(viper.GetString("bind"), nil)
+		err = http.ListenAndServe(viper.GetString("bind"), handler)
 	}
 
 	log.Fatal(err)
@@ -71,6 +80,8 @@ func connectAndReceive(sourceUrl string, incoming chan<- []byte) error {
 	if err != nil {
 		return err
 	}
+
+	logrus.Infof("Connected to %s", sourceUrl)
 
 	for {
 		msgType, msg, err := source.ReadMessage()
