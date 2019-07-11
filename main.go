@@ -1,11 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
+	"github.com/spf13/viper"
 	"net/http"
-	"os"
 	"time"
 )
 
@@ -21,14 +20,16 @@ const inBuffer = 256
 var log = logrus.StandardLogger()
 
 func main() {
-	port := os.Getenv("PORT")
-	if port == "" {
-		log.Fatal("$PORT not set")
+	viper.SetConfigFile("config.yml")
+	err := viper.ReadInConfig()
+	if err != nil {
+		log.Fatal(err)
 	}
-
-	sourceUrl := os.Getenv("WS_SOURCE")
-	if sourceUrl == "" {
-		log.Fatal("$WS_SOURCE not set")
+	if viper.GetString("bind") == "" {
+		log.Fatal(`Key "bind" not set`)
+	}
+	if viper.GetString("source") == "" {
+		log.Fatal(`Key "source" not set`)
 	}
 
 	source := make(chan []byte, inBuffer)
@@ -37,15 +38,21 @@ func main() {
 	go manage(source, newConns)
 
 	// Connect to source and ingest messages
-	go receiver(sourceUrl, source)
+	go receiver(viper.GetString("source"), source)
 
 	// Collect WS connections
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		wsHandler(w, r, newConns)
 	})
-	if err := http.ListenAndServe(fmt.Sprintf(":%s", port), nil); err != nil {
-		log.Fatal(err)
+
+	if viper.GetBool("tls.enabled") {
+		err = http.ListenAndServeTLS(viper.GetString("bind"),
+			viper.GetString("tls.cert"), viper.GetString("tls.key"), nil)
+	} else {
+		err = http.ListenAndServe(viper.GetString("bind"), nil)
 	}
+
+	log.Fatal(err)
 }
 
 // receiver dumps messages from sourceUrl into incoming.

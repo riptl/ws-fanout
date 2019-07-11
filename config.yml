@@ -1,0 +1,6 @@
+bind: :8001
+source: ws://localhost:8080
+tls:
+  enabled: false
+  cert: /path/to/cert.pem
+  key: /path/to/key.pem
