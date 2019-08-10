@@ -1,4 +1,4 @@
-bind: :8001
+bind: :8000
 source: ws://localhost:8080
 tls:
   enabled: false

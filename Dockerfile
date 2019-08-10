@@ -10,6 +10,6 @@ RUN apk add git \
 FROM scratch
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=builder /go/bin/ws-fanout /bin/
-ENV PORT=8000
+ENV FANOUT_BIND=:8000
 EXPOSE 8000
 CMD ["/bin/ws-fanout"]

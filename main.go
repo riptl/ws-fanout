@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/gorilla/websocket"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"net/http"
-	"os"
-	"time"
 )
 
 // fanout.go: A simple unidirectional WS message fanout
@@ -22,16 +24,22 @@ const inBuffer = 256
 var log = logrus.StandardLogger()
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "Usage: ws-fanout <config_file.yml>")
-		os.Exit(1)
+	viper.SetEnvPrefix("fanout")
+	viper.AutomaticEnv()
+
+	if len(os.Args) == 2 {
+		if strings.Contains(os.Args[1], "help") {
+			usage()
+		}
+		viper.SetConfigFile(os.Args[1])
+		err := viper.ReadInConfig()
+		if err != nil {
+			log.Fatal(err)
+		}
+	} else if len(os.Args) != 1 {
+		usage()
 	}
 
-	viper.SetConfigFile(os.Args[1])
-	err := viper.ReadInConfig()
-	if err != nil {
-		log.Fatal(err)
-	}
 	if viper.GetString("bind") == "" {
 		log.Fatal(`Key "bind" not set`)
 	}
@@ -54,6 +62,7 @@ func main() {
 
 	log.Infof("Listening on %s", viper.GetString("bind"))
 
+	var err error
 	if viper.GetBool("tls.enabled") {
 		err = http.ListenAndServeTLS(viper.GetString("bind"),
 			viper.GetString("tls.cert"), viper.GetString("tls.key"), handler)
@@ -127,4 +136,10 @@ func manage(source <-chan []byte, newConns chan *websocket.Conn) {
 		newConns: newConns,
 	}
 	m.run()
+}
+
+func usage() {
+	_, _ = fmt.Fprintln(os.Stderr, "Usage: ws-fanout [config_file.yml]\n" +
+		"  or over environment: $FANOUT_...")
+	os.Exit(1)
 }
